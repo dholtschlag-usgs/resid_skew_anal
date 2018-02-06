@@ -1,0 +1,175 @@
+---
+title: "Analysis of Skew Residuals in HUCs 04 and 05"
+output: html_notebook
+---
+
+
+
+```{r setup}
+library(tidyverse)
+library(knitr)
+```
+
+
+## Read Skew Residuals
+
+
+***
+```{r read_data}
+df <- read_tsv(file = 'C:/Home/SW_Specialist/Skew0405/data/skew_data.txt') %>% 
+   mutate(Station = paste0('0',USGS),
+          Resid_skew_sign = factor(sign(Residuals))) %>% 
+   rename(Record_len      = Pseudo_Length,
+          Station_skew    = Station_Skew,
+          Residual_skew   = Residuals) 
+
+summary(df)
+
+```
+
+
+```{r list_data, fig.cap = 'Table showing contents of skew data set'}
+
+kable(df[1:20,c('Station','Station_skew','Residual_skew','Lat_Cntrd','Long_Cntrd')],
+      caption = 'Sample of Skew Residual Data')
+
+```
+
+## Convert lat and long coordinates
+
+
+```{r convert_coord}
+library(ggplot2)
+library(ggthemes)
+
+us_map <- map_data('state')
+
+us_map %>% 
+   filter(region %in% c('michigan', 'ohio', 'indiana', 'wisconsin', 'illinois',
+                        'pennsylvania','new york', 'kentucky', 'west virginia',
+                        'vermont')) %>% 
+   ggplot( aes(x = long, y = lat, group = group)) + 
+   geom_polygon(fill = 'tan', color = 'black') + 
+   coord_map('conic', lat0 = 42) +
+   # theme_void() + # This eliminates lat/lon marks 
+   theme_few() +
+   geom_point(data = df, aes( x=Long_Cntrd, y = Lat_Cntrd, 
+                              colour = Resid_skew_sign, group = NULL)) +
+   scale_colour_manual( values = c('red', 'blue'))
+
+
+```
+
+
+```{r proj_lat_long}
+library(rgdal)
+library(sp)
+
+df_prj  <- df
+
+coordinates(df_prj) <- c('Long_Cntrd', 'Lat_Cntrd')
+class(df_prj)
+
+proj4string(df_prj) <- "+proj=longlat +datum=NAD83"
+
+# Same transform as 
+#  EPSG:102003 USA_Contiguous_Albers_Equal_Area_Conic'
+proj_sel <-  'EPSG:102004 USA_Contiguous_Lambert_Conformal_Conic'
+#  EPSG:102005 USA_Contiguous_Equidistant_Conic
+df_prj <- spTransform(df_prj, CRS = CRS("+init=esri:102004"))
+
+easting  <- attributes(df_prj)$coords[,1]
+northing <- attributes(df_prj)$coords[,2]
+
+
+plot(easting, northing, pch = 16, col = 'blue')
+
+east_std <- (easting  - mean(easting ))/100000
+nrth_std <- (northing - mean(northing))/100000
+
+plot(east_std, nrth_std, pch = 16, col = 'green4',
+     main = paste('Regional Skew Streamgages',proj_sel),
+     xlab = 'Standardized Easting', ylab = 'Standardized Northing')
+
+```
+```{r skew_dist}
+
+df %>%
+   ggplot( aes( x = Station_skew)) +
+   geom_histogram() + 
+   geom_vline( xintercept = 0, color = 'red', linetype = 'dashed')
+
+ndxOut <- which(df$Station_skew > 2)
+
+# Remove outlier
+
+df <- df[-ndxOut,]
+
+
+df %>%
+   ggplot( aes( x = Station_skew)) +
+   geom_freqpoly( aes(y = ..density..), color = 'salmon', size = 1.2) + 
+   geom_vline( xintercept = 0, color = 'red', linetype = 'dashed') +
+   stat_function(fun = dnorm, args = list(mean = mean(df$Station_skew),
+                                          sd   =   sd(df$Station_skew)),
+                 color = 'blue') +
+   theme_few()
+
+```
+
+
+```{r gam_anal}
+
+library(mgcv)
+
+df$east <- east_std[-ndxOut]
+df$nrth <- nrth_std[-ndxOut]
+
+
+gam1 <- gam(Station_skew ~ s(east, nrth), weights = Record_len, data = df)
+
+summary(gam1)
+
+plot(gam1)
+
+df$gam_resid <- gam1$residuals
+
+```
+
+
+
+```{r resid_plot}
+
+df %>% 
+   ggplot( aes(x = gam_resid) ) +
+   geom_density(colour = 'red', size = 1.5) +
+   geom_density( aes(x = Residual_skew), color = 'blue', size = 1.5) +
+   theme_few() 
+
+us_map %>% 
+   filter(region %in% c('michigan', 'ohio', 'indiana', 'wisconsin', 'illinois',
+                        'pennsylvania','new york', 'kentucky', 'west virginia',
+                        'vermont')) %>% 
+   ggplot( aes(x = long, y = lat, group = group)) + 
+   geom_polygon(fill = 'tan', color = 'black') + 
+   coord_map('conic', lat0 = 42) +
+   # theme_void() + # This eliminates lat/lon marks 
+   # theme_few() +
+   geom_point(data = df, aes( x=Long_Cntrd, y = Lat_Cntrd, 
+                              colour = gam_resid, group = NULL)) +
+   scale_colour_gradient2(low  = "red" , mid = "white",
+                          high = "blue" )
+
+
+```
+
+```{r resid_info}
+
+df %>% 
+   ggplot( aes(x = Station, y = gam_resid)) +
+   geom_point()
+
+
+
+
+```
