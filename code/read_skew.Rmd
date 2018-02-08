@@ -1,7 +1,10 @@
 ---
 title: "Preliminary Analysis of Skew Residuals in HUCs 04 and 05"
-author: Dave Holtschlag
-output: html_notebook
+author: "Dave Holtschlag"
+date: 
+output:
+  html_document:
+    df_print: paged
 ---
 
 ## Introduction
@@ -10,7 +13,7 @@ The distributions of annual peak flows at USGS streamgages are used estimate flo
 
 A Bayesian generalized least squares (B-GLS) model is the standard approach for estimating the regional skew by regression on basin and climatic characteristics.  This approach accounts for the length of record and spatial correlations among contemporaneous annual peaks in a network of streamgages by appropriately adjusting model parameters and uncertainty estimates. Despite the capabilities of the underlying model, identifying individual basin or climatic characteristics that are statistically associated with flood skew is problematic.  Therefore, a constant is commonly used to estimate regional skew under the B-GLS model.  
 
-It may be the case, however, that subtle spatial variations in regional skew are caused by a combination of factors that are not linearly associated with available basin or climatic characteristics. Such effects may result in a persistent spatial pattern in the residuals of the skew estimates.  To assess this possibility, a generalized additive model (GAM) is applied to the skew residuals from a B-GLS analysis of two, two-digit hydrologic regions, which includes US Great Lakes (04) and the Ohio River (05) basins. The GAM model provides a flexible basis of smoothing functions to accommodate irregular variations in covariates, such as spatial coordinates of gaged basin centroids.  Linear components also are accommodated in a GAM model.
+It may be the case, however, that subtle spatial variations in regional skew are caused by a combination of factors that are not linearly associated with available basin or climatic characteristics. Such effects may result in a persistent spatial pattern in the residuals of the skew estimates.  To assess this possibility, a generalized additive model (GAM) is applied to the skew residuals from a B-GLS analysis of two, two-digit hydrologic regions, which includes US Great Lakes (04) and the Ohio River (the northern part of 05) basins. The GAM model provides a flexible basis of smoothing functions to accommodate irregular variations in covariates, such as spatial coordinates of gaged basin centroids.  Linear components also are accommodated in a GAM model.
 
 Computed station skew statistics from 368 streamgages in hydrologic unit regions 04 and 05 with 35 or more years of annual peak flow data were used in this analysis.  Station skews were computed by use of methods described in Bulletin 17C.  A preliminary analysis of the data describes the spatial distribution of gaged basin centroids, and analyzes the distribution of station skew values for outliers.  A GAM model was fit to the skew values using the eastings and northing of basin centroids to provide an initial assessment of the potential utility of the GAM model. Within the GAM analysis, station-skews for individual streamgages will be weighted by their record length. This preliminary assessment was followed by repeated, random partitioning of the data set into training and testing subsets containing 80- and 20-percent of the full data set, respectively.  The testing data set was used to determine whether the GAM model outperformed the constant estimated by use of the B-GLS model. 
 
@@ -23,7 +26,6 @@ library(ggthemes)
 library(knitr)
 ```
 ***
-
 ## Read in Skew Data for HUC Regions 04 and 05
 
 ```{r read_data}
@@ -35,7 +37,7 @@ df <- read_tsv(file = 'C:/Home/SW_Specialist/Skew0405/data/skew_data.txt') %>%
           Residual_skew   = Residuals) 
 
 ```
-
+***
 ## List Subset of Data and Summarize
 
 ```{r list_data, fig.cap = 'Table showing contents of skew data set'}
@@ -47,78 +49,51 @@ kable(df[1:20,c('Station','Station_skew','Residual_skew','Lat_Cntrd','Long_Cntrd
 summary(df)
 
 ```
-
+***
 ## Plot Distribution of Streamgage Centrois
 
-Note: symbols discretize residuals into positive and negative values
+The map below shows HUC2 boundaries for Region 04 Great Lakes in brown, and for Region 05 Ohio River in green4.  State boundaries are shown with black lines, and locations of centroids for selected streamgage as points.  The centroids are color coded to help visually identify possible patterns in the residuals of skew estimates from the B-GLS estimates.  Negative skew residuals are shown in red and positive skew residuals are in blue.  Streamgages are notably absent in the southern part of the Ohio River basin.
 
-```{r convert_coord}
+
+```{r plot_map_skew_data, fig.width = 8, fig.cap = 'Figure 2. Map showing locations of basin centroids for selected streamgages in hydrologic regions 04 and 05.'}
+
+# Load packages for working with shapefiles
 library(rgdal)
 library(sp)
 
+# Read in shape file for Region 04 U.S. Great Lakes
 path <- 'C:/Home/SW_Specialist/Skew0405/GIS/WBD_05_HU2_Shape/Shape' 
 huc2_ohio_river  <- readOGR(dsn = path, layer = "WBDHU2")
 
+# Read in shapefile for Region 05 Ohio River
 path <- 'C:/Home/SW_Specialist/Skew0405/GIS/WBD_04_HU2_Shape/Shape'
 huc2_great_lakes <- readOGR(dsn = path, layer = "WBDHU2") 
 
-huc2_0405        <- rbind(huc2_great_lakes, huc2_ohio_river)
-
-# How to extract dataframe from spatial polygon
-spp <- SpatialPolygonsDataFrame(huc2_0405, data = as.data.frame(HUC2))
-dfx <- data.frame(id = getSpPPolygonsIDSlots(huc2_0405))
-row.names(dfx) <- getSpPPolygonsIDSlots(huc2_0405)
-spdf <- SpatialPolygonsDataFrame(huc2_0405, data =dfx)
-
-huc2_0405 %>% 
-   ggplot( aes(x = long, y = lat, group = group)) +
-   geom_polygon(fill = colors()[18], color = "black") +
-   geom_point(df, aes(x = Long_Cntrd, y = Lat_Cntrd))
-
-
-   geom_polygon(huc2_ohio_river, aes(x = long, y = lat, group = group),
-                fill = colors()[15], color = 'red')
-
-
-fill = colors()[18], 
-+ 
-   
-   geom_polygon(data = states_ohio_river, 
-                aes(x = long, y = lat, group = group),
-                fill = NA, color = 'grey') +
-   geom_point(data = skew_sites, 
-              aes( x = LONG_CENT, y = LAT_CENT, group = NULL),
-              color = 'red', 
-              size  = 0.5) +
-   coord_map() +
-   theme_few() + xlab('Longitude') + ylab('Latitude') 
-
-
-
-
+# Read in state map outline
 us_map <- map_data('state')
 
 us_map %>% 
    filter(region %in% c('michigan', 'ohio', 'indiana', 'wisconsin', 'illinois',
                         'pennsylvania','new york', 'kentucky', 'west virginia',
-                        'vermont')) %>% 
+                        'vermont', 'tennessee', 'virginia')) %>% 
    ggplot( aes(x = long, y = lat, group = group)) + 
-   geom_polygon(fill = 'tan', color = 'black') + 
-   geom_polygon(data = huc2_0405, aes(x = long, y = lat, group = group),
-                fill = NA, color = 'blue') +
-   geom_point(  data = df, aes( x = Long_Cntrd, y = Lat_Cntrd, group = NULL), 
-                color = 'red') + 
-   coord_map('conic', lat0 = 42) +
-   # theme_void() + # This eliminates lat/lon marks 
-   theme_few() +
+   geom_polygon(fill = 'cornsilk', color = 'black') + 
+   geom_polygon(data = huc2_great_lakes, aes(x = long, y = lat, group = group),
+                fill = NA, color = 'chocolate4') +
+   geom_polygon(data = huc2_ohio_river, aes(x = long, y = lat, group = group),
+                fill = NA, color = 'green4') +
    geom_point(data = df, aes( x=Long_Cntrd, y = Lat_Cntrd, 
                               colour = Resid_skew_sign, group = NULL)) +
-   scale_colour_manual( values = c('red', 'blue'))
-
+   scale_colour_manual( values = c('red', 'blue')) +
+   coord_map('conic', lat0 = 42) +
+   # theme_void() + # This eliminates lat/lon marks 
+   theme(legend.position = 'bottom') + xlab('Longitude') + ylab('Latitude') 
 
 ```
 ***
-## Project Latitudes and Longitudes of Basin Centroids
+## Projecting Latitudes and Longitudes of Basin Centroids
+
+Latitudes and longitudes are projected from geographic coordinates to planar coordinates so that distances between basin centroids were consistent. The Contiguous Lambert Conformal Conic projection, which was developed for mid-latitudes in the US, was selected to represent inter-centroid distances with limited distortion of the geographic positions.  The projections of longitudes and longitudes are labelled as easting and northings, respectively.  The eastings and northing were standardized by dividing by their respective means and dividing by 100,000, to avoid possible numerical difficulties with large magnitude values.  The standardized values are referred to as east_std and nrth_std, respectively.  
 
 ```{r proj_lat_long}
 library(rgdal)
@@ -135,47 +110,61 @@ proj4string(df_prj) <- "+proj=longlat +datum=NAD83"
 #  EPSG:102003 USA_Contiguous_Albers_Equal_Area_Conic'
 proj_sel <-  'EPSG:102004 USA_Contiguous_Lambert_Conformal_Conic'
 #  EPSG:102005 USA_Contiguous_Equidistant_Conic
-df_prj <- spTransform(df_prj, CRS = CRS("+init=esri:102004"))
+
+# Note: the projection below is based on the ESRI code 102004
+df_prj   <- spTransform(df_prj, CRS = CRS("+init=esri:102004"))
 
 easting  <- attributes(df_prj)$coords[,1]
 northing <- attributes(df_prj)$coords[,2]
 
-
-plot(easting, northing, pch = 16, col = 'blue')
+# plot(easting, northing, pch = 16, col = 'blue')
 
 east_std <- (easting  - mean(easting ))/100000
 nrth_std <- (northing - mean(northing))/100000
 
-plot(east_std, nrth_std, pch = 16, col = 'green4',
-     main = paste('Regional Skew Streamgages',proj_sel),
+plot(east_std, nrth_std, pch = 21, bg = 'green', col = 'black',
+     main = 'Selected Basins for Skew Analysis in the Lambert Conformal Conic Projection',
      xlab = 'Standardized Easting', ylab = 'Standardized Northing')
 
 ```
-```{r skew_dist}
+***
+## Statistical Distribution of Station Skew Values
 
+A histogram of station skew values approximates their emperical distribution.  Station skew values greater than 2 were considered to be possible outliers in this analysis.  A frequency polygon of the distribution of station skews without the two outlier seemed well approximated by a normal distribution. 
+
+```{r skew_dist_outlier}
+
+# Histogram of station skew values
 df %>%
    ggplot( aes( x = Station_skew)) +
    geom_histogram() + 
-   geom_vline( xintercept = 0, color = 'red', linetype = 'dashed')
+   geom_vline( xintercept = 0, color = 'red', linetype = 'dashed') + 
+   labs( x = 'Station Skew', y = 'Count', 
+         title = 'Histogram of Station Skew Values at Selected USGS Streamgages') +
+   theme_few()
 
+# Indentify indices of possible outliers
 ndxOut <- which(df$Station_skew > 2)
 
-# Remove outlier
-
+# Remove outliers from data set
 df <- df[-ndxOut,]
 
-
+# Plot frequency polygon of skew distribution with normal distribution reference
 df %>%
    ggplot( aes( x = Station_skew)) +
    geom_freqpoly( aes(y = ..density..), color = 'salmon', size = 1.2) + 
    geom_vline( xintercept = 0, color = 'red', linetype = 'dashed') +
    stat_function(fun = dnorm, args = list(mean = mean(df$Station_skew),
                                           sd   =   sd(df$Station_skew)),
-                 color = 'blue') +
-   theme_few()
+                 color = 'blue', size = 1.2) +
+   theme_few() + labs(x = 'Station Skew', y = 'Count', subtitle = 'Normal Reference in Blue',
+                      title = 'A Frequency Polygon Showing the Distribution of Station Skews')
 
 ```
+***
+## Generalized Additive Model 
 
+A GAM model developed by use of the gam function in the R Package 'mgcv' was used to approximate the spatial distribution of station skew values based on a two-dimensional spline approximation of standardized northing (nrth) and easting (east) coordinates.  Streamgages were weighted in proportion to the effective years of streamflow data. The GAM model describes about 21.5 percent of the variability in station skew values with 24.42 effective degrees of freedom.  The spline component was highly significant (p-value < 0.001).  An intercept term was estimated that was somewhat less, but comparable to, the magnitude of the B-GLS term.  Note, that the GAM model was estimated without the two highly positive outliers.  A simple plot approximates the spatial trend in the analysis.  Small black dots in the plot correspond to basin centroid locations. 
 
 ```{r gam_anal}
 
@@ -189,26 +178,37 @@ gam1 <- gam(Station_skew ~ s(east, nrth), weights = Record_len, data = df)
 
 summary(gam1)
 
-plot(gam1)
+gam_plt <- plot(gam1)
 
-df$gam_resid <- gam1$residuals
 
 ```
+***
+## Spatial Distribution of GAM Residuals
 
+The assumption GAM residuals in the family of Gaussian distriubtion is confirmed by a frequency polygon with a reference normal curve. The spatial distribution of GAM model residuals is shown in the map below to provide for a basis for detection of possible spatial patterns in the residuals. 
 
+```{r spatial_resid}
 
-```{r resid_plot}
+# Store GAM residual
+df$gam_resid <- gam1$residuals
 
-df %>% 
-   ggplot( aes(x = gam_resid) ) +
-   geom_density(colour = 'red', size = 1.5) +
-   geom_density( aes(x = Residual_skew), color = 'blue', size = 1.5) +
-   theme_few() 
+# Plot frequency polygon of skew distribution with normal distribution reference
+df %>%
+   ggplot( aes( x = gam_resid)) +
+   geom_freqpoly( aes(y = ..density..), color = 'salmon', size = 1.2) + 
+   geom_vline( xintercept = 0, color = 'red', linetype = 'dashed') +
+   stat_function(fun = dnorm, args = list(mean = mean(df$gam_resid),
+                                          sd   =   sd(df$gam_resid)),
+                 color = 'blue', size = 1.2) +
+   theme_few() + labs(x = 'Skew Residual from GAM Model', 
+                      y = 'Count', subtitle = 'Normal Reference in Blue',
+                      title = 'A Frequency Polygon Showing the Distribution of GAM Residuals')
+
 
 us_map %>% 
    filter(region %in% c('michigan', 'ohio', 'indiana', 'wisconsin', 'illinois',
                         'pennsylvania','new york', 'kentucky', 'west virginia',
-                        'vermont')) %>% 
+                        'vermont', 'virginia', 'tennessee')) %>% 
    ggplot( aes(x = long, y = lat, group = group)) + 
    geom_polygon(fill = 'tan', color = 'black') + 
    coord_map('conic', lat0 = 42) +
@@ -217,30 +217,64 @@ us_map %>%
    geom_point(data = df, aes( x=Long_Cntrd, y = Lat_Cntrd, 
                               colour = gam_resid, group = NULL)) +
    scale_colour_gradient2(low  = "red" , mid = "white",
-                          high = "blue" )
+                          high = "blue" ) +
+   labs(x = 'Longitude', y = 'Latitude', 
+        title = 'Map showing the distribution of GAM Model Residuals')
 
 
 ```
 
 ## Skew Contour Map
 
-A skew contour map is developed that is based on the gam1 model above.  
+A refined skew contour map of the GAM Model estimate is shown below with station skew estimates as points located at the basin centroids. Hovering the cursor over the map displays information on both the contours and the station skew estimates.  In particular, hovering over the points display the streamgage number and station skew in the lower line of output. 
 
-```{r contour_info}
-
-tmp  <- plot(gam1)
+![Alt text](C:/Home/SW_Specialist/Skew0405/resid_skew_anal/figs/skew_0405_gam_fit.png)
 
 
-xvec <- tmp[[1]]$x
-yvec <- tmp[[1]]$y
-zvec <- tmp[[1]]$fit
+
+![Alt text](C:/Home/SW_Specialist/Skew0405/resid_skew_anal/figs/skew_0405_gam_se.png)
+
+
+
+```{r contour_info, eval = FALSE}
+library(plotly)
+
+xvec <- gam_plt[[1]]$x
+yvec <- gam_plt[[1]]$y
+zvec <- gam_plt[[1]]$fit
 
 plot_ly( x = c(xvec), y = c(yvec),
    z = matrix(zvec,40,40, byrow = TRUE), type = 'contour', 
    contours = list(start = -0.5, end = 0.7, size = 0.2, showlabels = TRUE)) %>% 
    add_trace(type = 'scatter', mode = 'markers', x = df$east, y = df$nrth, 
-               color = 'red', hovertext = paste(df$Station, df$Station_skew)) 
+             z = df$Station_skew, colours = 'red',
+               hovertext = paste(df$Station, df$Station_skew)) %>% 
+   layout(xaxis = list(title = 'Easting, in Standardized Feet'),
+          yaxis = list(title = 'Northing, in Standardized Feet'),
+          title = 'Station and GAM Estimated Regional Skew in Great Lakes and Ohio River Basin')
 
+# Standard error of GAM model
+# zvec <- gam_plt[[1]]$se
+# plot_ly( x = c(xvec), y = c(yvec),
+#    z = matrix(zvec,40,40, byrow = TRUE), type = 'contour', 
+#    contours = list(start = 0.05, end = 0.30, size = 0.05, showlabels = TRUE)) %>% 
+#    add_trace(type = 'scatter', mode = 'markers', x = df$east, y = df$nrth, 
+#              z = df$Station_skew, colours = 'red',
+#                hovertext = paste(df$Station, df$Station_skew)) %>% 
+#    layout(xaxis = list(title = 'Easting, in Standardized Feet'),
+#           yaxis = list(title = 'Northing, in Standardized Feet'),
+#           title = 'Standard Error of Estimated Regional Skew in Great Lakes and Ohio River Basin')
+
+
+# Display standard error from grid spanning data range
+gridxy    <- expand.grid(xvec, yvec)
+gam_grid  <- predict.gam(gam1, newdata = data.frame(east = gridxy$Var1, nrth = gridxy$Var2), se.fit = TRUE )
+plot_ly( x = c(xvec), y = c(yvec),
+   z = matrix(gam_grid$se.fit, 40, 40, byrow = TRUE), type = 'contour',
+   contours = list(start = 0.05, end = 0.30, size = 0.05, showlabels = TRUE)) %>%
+   layout(xaxis = list(title = 'Easting, in Standardized Feet'),
+          yaxis = list(title = 'Northing, in Standardized Feet'),
+          title = 'Standard Error of Estimated Regional Skew in Great Lakes and Ohio River Basin')
 
 
 
