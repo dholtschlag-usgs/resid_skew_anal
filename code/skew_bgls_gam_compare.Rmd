@@ -1,7 +1,7 @@
 ---
-title: "Preliminary Analysis of Skew Residuals in HUCs 04 and 05"
+title: "Preliminary Comparison of Skew Regionalization with a Weighted Mean Constant Model and Generalized Additive Model for the U.S. Great Lakes and Ohio River Hydrologic Regions"
 author: "Dave Holtschlag"
-date: 
+date: "February 8, 2016"
 output:
   html_document:
     df_print: paged
