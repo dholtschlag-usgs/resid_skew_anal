@@ -29,7 +29,7 @@ library(knitr)
 ## Read in Skew Data for HUC Regions 04 and 05
 
 ```{r read_data}
-df <- read_tsv(file = 'C:/Home/SW_Specialist/Skew0405/data/skew_data.txt') %>% 
+df <- read_tsv(file = 'C:/Home/SW_Specialist/Skew0405/resid_skew_anal/data/skew_data.txt') %>% 
    mutate(Station = paste0('0',USGS),
           Resid_skew_sign = factor(sign(Residuals))) %>% 
    rename(Record_len      = Pseudo_Length,
