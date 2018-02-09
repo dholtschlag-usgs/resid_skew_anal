@@ -48,6 +48,13 @@ kable(df[1:20,c('Station','Station_skew','Residual_skew','Lat_Cntrd','Long_Cntrd
 # Print summary of 
 summary(df)
 
+
+df$HUC        <- rep('05', nrow(df))
+ndx04         <- which(substr(df$Station,1,2) == '04')
+df$HUC[ndx04] <- '04'
+
+
+
 ```
 ***
 ## Plot Distribution of Streamgage Centrois
@@ -88,6 +95,28 @@ us_map %>%
    coord_map('conic', lat0 = 42) +
    # theme_void() + # This eliminates lat/lon marks 
    theme(legend.position = 'bottom') + xlab('Longitude') + ylab('Latitude') 
+```
+
+
+
+```{r group_HUC}
+us_map %>% 
+   filter(region %in% c('michigan', 'ohio', 'indiana', 'wisconsin', 'illinois',
+                        'pennsylvania','new york', 'kentucky', 'west virginia',
+                        'vermont', 'tennessee', 'virginia')) %>% 
+   ggplot( aes(x = long, y = lat, group = group)) + 
+   geom_polygon(fill = 'cornsilk', color = 'black') + 
+   geom_polygon(data = huc2_great_lakes, aes(x = long, y = lat, group = group),
+                fill = NA, color = 'chocolate4') +
+   geom_polygon(data = huc2_ohio_river, aes(x = long, y = lat, group = group),
+                fill = NA, color = 'green4') +
+   geom_point(data = df, aes( x=Long_Cntrd, y = Lat_Cntrd, 
+                              colour = HUC, group = HUC)) +
+   scale_colour_manual( values = c('red', 'blue')) +
+   coord_map('conic', lat0 = 42) +
+   # theme_void() + # This eliminates lat/lon marks 
+   theme(legend.position = 'bottom') + xlab('Longitude') + ylab('Latitude') 
+
 
 ```
 ***
@@ -149,8 +178,18 @@ ndxOut <- which(df$Station_skew > 2)
 # Remove outliers from data set
 df <- df[-ndxOut,]
 
+df %>% 
+   mutate(HUC_name = ifelse(HUC == '04', 'Great Lakes', 'Ohio River')) %>% 
+   ggplot( aes(x = HUC_name, y = Residual_skew)) +
+   geom_boxplot(notch = TRUE, varwidth = TRUE) +
+   geom_hline( yintercept = 0, color = 'red', linetype = 'dashed') +
+   theme_few() +
+   labs(x = 'Hydrologic Region', y = 'Skew Residual from Constant B-GLS')
+   
+
+
 # Plot frequency polygon of skew distribution with normal distribution reference
-df %>%
+df %>% 
    ggplot( aes( x = Station_skew)) +
    geom_freqpoly( aes(y = ..density..), color = 'salmon', size = 1.2) + 
    geom_vline( xintercept = 0, color = 'red', linetype = 'dashed') +
